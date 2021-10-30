@@ -223,7 +223,7 @@ void disassemble (FILE *f, bytefile *bf) {
         break;
         
       case  9:
-        fprintf (f, "FAIL\t%d", INT);
+        fprintf (f, "FAIL\t%d ", INT);
         fprintf (f, "%d", INT);
         break;
         
@@ -294,8 +294,367 @@ void dump_file (FILE *f, bytefile *bf) {
   disassemble (f, bf);
 }
 
+typedef struct activation {
+  int* args;
+  int* locals;
+  int* accesses;
+  struct activation* old_fp;
+  char* old_ip;
+} activation;
+
+void interpreter(bytefile *bf, char* filename) {
+  const char* ip = bf->code_ptr;
+  int* sp_base = malloc(256 * 1024 * 1024 * sizeof(int));
+  int* sp = sp_base;
+  activation* fp = (activation*) sp;
+  __gc_init();
+
+  void push(int x) {
+    *sp = x;
+    sp++;
+  }
+  int pop() {
+    sp--;
+    return *sp;
+  }
+  int peek() {
+    return *(sp - 1);
+  }
+  char flag = 1;
+  do {
+    char x = BYTE,
+         h = (x & 0xF0) >> 4,
+         l = x & 0x0F;
+    switch (h) {
+      case 15:
+        flag = 0;
+        break;
+        
+      case 0:
+        //BINOP
+        ; int y = UNBOX(pop());
+        int x = UNBOX(pop());
+
+        switch (l) {
+          //{"+", "-", "*", "/", "%", "<", "<=", ">", ">=", "==", "!=", "&&", "!!"};
+          case 1: push(BOX(x + y)); break;
+          case 2: push(BOX(x - y)); break;
+          case 3: push(BOX(x * y)); break;
+          case 4: push(BOX(x / y)); break;
+          case 5: push(BOX(x % y)); break;
+          case 6: push(BOX(x < y)); break;
+          case 7: push(BOX(x <= y)); break;
+          case 8: push(BOX(x > y)); break;
+          case 9: push(BOX(x >= y)); break;
+          case 10: push(BOX(x == y)); break;
+          case 11: push(BOX(x != y)); break;
+          case 12: push(BOX(x && y)); break;
+          case 13: push(BOX(x || y)); break;
+          default: FAIL;
+        }
+        break;
+        
+      case 1:
+        switch (l) {
+        case  0:
+          //CONST
+          push(BOX(INT));
+          break;
+          
+        case  1:
+          //STRING
+          push(Bstring(bf->string_ptr + INT));
+          break;
+            
+        case  2:
+          //SEXP
+          __asm__("pushl %0" : : "r" (LtagHash(bf->string_ptr + INT)));
+          int ar = INT;
+          for (int i = 0; i < ar; i++) {
+            __asm__("pushl %0" : : "r" (pop()));
+          }
+          __asm__("pushl %0" : : "r" (BOX(ar + 1)));
+          __asm__("call Bsexp");
+          __asm__("movl %eax, %ebx");
+          __asm__("addl %0, %%esp" : : "r" (4 * (ar + 2)));
+          register int ebx asm("ebx");
+          push(ebx);
+          break;
+          
+        case  4:
+          //STA
+          ; int v = pop();
+          int i2 = pop();
+          int x2 = pop();
+          push(Bsta(v, i2, x2));
+          break;
+          
+        case  5:
+          //JMP
+          ip = bf->code_ptr + INT;
+          break;
+          
+        case  6:
+        case  7:
+          //END/RET
+          if (fp->old_fp == sp_base) {
+            //returning from main
+            flag = 0;
+            break;
+          }
+          int res = pop();
+          ip = fp->old_ip;
+          sp = fp->args;
+          fp = fp->old_fp;
+          push(res);
+          break;
+          
+        case  8:
+          //DROP
+          pop();
+          break;
+          
+        case  9:
+          //DUP
+          push(peek());
+          break;
+          
+        case 10:
+          //SWAP
+          ; int x = pop();
+          int y = pop();
+          push(x);
+          push(y);
+          break;
+
+        case 11:
+          //ELEM
+          ; int i = pop();
+          int p = pop();
+          push(Belem(p, i));
+          break;
+          
+        default:
+          FAIL;
+        }
+        break;
+        
+      case 2:
+        //LD
+        switch (l) {
+        case 0: push(*(bf->global_ptr + INT)); break;
+        case 1: push(*(fp->locals + INT)); break;
+        case 2: push(*(fp->args + INT)); break;
+        case 3: push(* (int*) *(fp->accesses + INT)); break;
+        default: FAIL;
+        }
+        break;
+      case 3:
+        //LDA
+        switch (l) {
+        case 0: ; int ptr = bf->global_ptr + INT; push(ptr); push(ptr); break;
+        case 1: ptr = fp->locals + INT; push(ptr); push(ptr); break;
+        case 2: ptr = fp->args + INT; push(ptr); push(ptr); break;
+        case 3: ptr = *(fp->accesses + INT); push(ptr); push(ptr); break;
+        default: FAIL;
+        }
+        break;
+      case 4:
+        //ST
+        switch (l) {
+        case 0: *(bf->global_ptr + INT) = peek(); break;
+        case 1: *(fp->locals + INT) = peek(); break;
+        case 2: *(fp->args + INT) = peek(); break;
+        case 3: *(int*)*(fp->accesses + INT) = peek(); break;
+        default: FAIL;
+        }
+        break;
+        
+      case 5:
+        switch (l) {
+        case  0:
+          //CJMPz
+          ; int ofs = INT;
+          if (!UNBOX(pop())) {
+            ip = bf->code_ptr + ofs;
+          }
+          break;
+          
+        case  1:
+          //CJMPnz
+          ; ofs = INT;
+          if (UNBOX(pop())) {
+            ip = bf->code_ptr + ofs;
+          }
+          break;
+          
+        case  2:
+          //BEGIN
+          ; activation act;
+          act.args = sp;
+          sp += INT + 1;
+          act.old_ip = pop();
+          act.accesses = sp;
+          act.old_fp = fp;
+          act.locals = sp;
+          sp += INT;
+          fp = sp;
+          memcpy(sp, &act, sizeof(activation));
+          sp = (int*) ((char*) sp + sizeof(activation));
+          break;
+          
+        case  3:
+          //CBEGIN
+          act.args = sp;
+          sp += INT + 2;
+          int accN = pop();
+          act.old_ip = pop();
+          sp += 2;
+          act.accesses = sp;
+          sp += accN;
+          act.old_fp = fp;
+          act.locals = sp;
+          sp += INT;
+          fp = sp;
+          memcpy(sp, &act, sizeof(activation));
+          sp = (int*) ((char*) sp + sizeof(activation));
+          break;
+          
+        case  4:
+          //CLOSURE
+          ; int addr = INT;
+          int n = INT;
+          for (int i = 0; i < n; i++) {
+            switch (BYTE) {
+              case 0: __asm__("pushl %0" : : "r" (*(bf->global_ptr + INT))); break;
+              case 1: __asm__("pushl %0" : : "r" (*(fp->locals + INT))); break;
+              case 2: __asm__("pushl %0" : : "r" (*(fp->args + INT))); break;
+              case 3: __asm__("pushl %0" : : "r" (* (int*) *(fp->accesses + INT))); break;
+              default: FAIL;
+            }
+          }
+          __asm__("pushl %0" : : "r" (addr));
+          __asm__("pushl %0" : : "r" (BOX(n)));
+          __asm__("call Bclosure");
+          __asm__("movl %eax, %ebx");
+          __asm__("addl %0, %%esp" : : "r" (4 * (n + 1)));
+          register int ebx asm("ebx");
+          push(ebx);
+        break;
+            
+        case  5:
+          //CALLC
+          ; int argN = INT;
+          int* tmp = malloc(argN * sizeof(int));
+          for (int i = 0; i < argN; i++) {
+            tmp[i] = pop();
+          }
+          data* r = TO_DATA(pop());
+          ofs = *(int*)r->contents;
+          for (int i = argN - 1; i >= 0; i--) {
+            push(tmp[i]);
+          }
+          accN = LEN(r->tag) - 1;
+          push(ip);
+          push(accN);
+          for (int i = accN - 1; i >= 0; i--) {
+            push(((int*)r->contents) + i + 1);
+          }
+          ip = bf->code_ptr + ofs;
+          sp -= argN + accN + 2;
+          free(tmp);
+          break;
+          
+        case  6:
+          //CALL
+          ofs = INT;
+          argN = INT;
+          push(ip);
+          push(0);
+          ip = bf->code_ptr + ofs;
+          sp -= argN + 2;
+          break;
+          
+        case  7:
+          //TAG
+          ; int h = LtagHash(bf->string_ptr + INT);
+          push(Btag(pop(), h, BOX(INT)));
+          break;
+          
+        case  8:
+          //ARRAY
+          push(Barray_patt(pop(), BOX(INT)));
+          break;
+          
+        case  9:
+          //FAIL
+          ; int a = BOX(INT);
+          int b = BOX(INT);
+          Bmatch_failure(pop(), filename, a, b);
+          break;
+          
+        case 10:
+          //LINE
+          INT;
+          break;
+
+        default:
+          FAIL;
+        }
+        break;
+        
+      case 6:
+        //PATT 
+        //{"=str", "#string", "#array", "#sexp", "#ref", "#val", "#fun"}
+        switch (l) {
+        case 0: push(Bstring_patt(pop(), pop())); break;
+        case 1: push(Bstring_tag_patt(pop())); break;
+        case 2: push(Barray_tag_patt(pop())); break;
+        case 3: push(Bsexp_tag_patt(pop())); break;
+        case 4: push(Bboxed_patt(pop())); break;
+        case 5: push(Bunboxed_patt(pop())); break;
+        case 6: push(Bclosure_tag_patt(pop())); break;
+        default: FAIL;
+        }
+        break;
+
+      case 7: {
+        switch (l) {
+        case 0: push(Lread()); break;
+        case 1: push(Lwrite(pop())); break;
+        case 2: push(Llength(pop())); break;
+        case 3: push(Lstring(pop())); break;
+        case 4:
+          ; int n = INT;
+          for (int i = 0; i < n; i++) {
+            __asm__("pushl %0" : : "r" (pop()));
+          }
+          __asm__("pushl %0" : : "r" (BOX(n)));
+          __asm__("call Barray");
+          __asm__("movl %eax, %ebx");
+          __asm__("addl %0, %%esp" : : "r" (4 * (n + 1)));
+          register int ebx asm("ebx");
+          push(ebx);
+          break;
+        default:
+          FAIL;
+        }
+      }
+      break;
+        
+      default:
+        FAIL;
+    }
+  }
+  while (flag);
+  
+}
+
 int main (int argc, char* argv[]) {
   bytefile *f = read_file (argv[1]);
-  dump_file (stdout, f);
+  //dump_file (stdout, f);
+  interpreter (f, argv[1]);
+  free(f->global_ptr);
+  free(f);
   return 0;
 }

@@ -2,6 +2,7 @@
 *.cmi
 *.cmx
 *.cmo
+*.cmt
 *.o
 .merlin
 

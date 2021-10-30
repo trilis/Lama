@@ -11,6 +11,7 @@ $(TESTS): %: %.lama
 	@LAMA=../../runtime $(LAMAC) $< && cat $@.input | ./$@ > $@.log && diff $@.log orig/$@.log
 	@cat $@.input | $(LAMAC) -i $< > $@.log && diff $@.log orig/$@.log
 	@cat $@.input | $(LAMAC) -s $< > $@.log && diff $@.log orig/$@.log
+	@LAMA=../../runtime $(LAMAC) -b $< && cat $@.input | ../../byterun/byterun $@.bc > $@.log && diff $@.log orig/$@.log
 
 clean:
 	rm -f *.log *.s *~
