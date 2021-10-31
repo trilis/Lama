@@ -647,7 +647,7 @@ void interpreter(bytefile *bf, char* filename) {
     }
   }
   while (flag);
-  
+  free(sp_base);
 }
 
 int main (int argc, char* argv[]) {
