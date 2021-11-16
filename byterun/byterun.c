@@ -598,6 +598,8 @@ void interpreter(bytefile *bf, char* filename) {
         case CALLC:
           ; int argN = INT;
           data* r = TO_DATA(*(sp - argN - 1));
+          memmove(sp - argN - 1, sp - argN, argN * sizeof(int));
+          sp--;
           ofs = *(int*)r->contents;
           accN = LEN(r->tag) - 1;
           push(ip);
