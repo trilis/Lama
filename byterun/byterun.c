@@ -15,7 +15,7 @@ void *__stop_custom_data;
 #define ST 4
 #define PATT 6
 #define CALL_EXTERNAL 7
-#define EOF 15
+#define END_OF_FILE 15
 
 #define CONST 0
 #define STRING 1
@@ -366,7 +366,6 @@ typedef struct activation {
   int* accesses;
   struct activation* old_fp;
   char* old_ip;
-  int* old_sp;
 } activation;
 
 void interpreter(bytefile *bf, char* filename) {
@@ -374,7 +373,9 @@ void interpreter(bytefile *bf, char* filename) {
   int* sp_base = malloc(STACK_SIZE * sizeof(int));
   int* sp = sp_base;
   activation* fp = (activation*) sp;
-  __gc_init();
+  __asm__("movl %0, __gc_stack_bottom" : : "r" (sp_base));
+  __init();
+  __asm__("movl %0, __gc_stack_top" : : "r" (sp));
   void check_sp(int new_bytes) {
     if ((void*) sp - (void*) sp_base + new_bytes > STACK_SIZE * sizeof(int)) {
       failure("stack overflow\n");
@@ -384,9 +385,11 @@ void interpreter(bytefile *bf, char* filename) {
     check_sp(sizeof(int));
     *sp = x;
     sp++;
+    __asm__("movl %0, __gc_stack_top" : : "r" (sp));
   }
   int pop() {
     sp--;
+    __asm__("movl %0, __gc_stack_top" : : "r" (sp));
     return *sp;
   }
   int peek() {
@@ -397,7 +400,7 @@ void interpreter(bytefile *bf, char* filename) {
          h = (x & 0xF0) >> 4,
          l = x & 0x0F;
     switch (h) {
-      case EOF:
+      case END_OF_FILE:
         free(sp_base);
         return;
         
@@ -468,6 +471,7 @@ void interpreter(bytefile *bf, char* filename) {
           int res = pop();
           ip = fp->old_ip;
           sp = fp->args;
+          __asm__("movl %0, __gc_stack_top" : : "r" (sp));
           fp = fp->old_fp;
           push(res);
           break;
@@ -555,6 +559,7 @@ void interpreter(bytefile *bf, char* filename) {
           check_sp(sizeof(activation));
           memcpy(sp, &act, sizeof(activation));
           sp = (int*) ((char*) sp + sizeof(activation));
+          __asm__("movl %0, __gc_stack_top" : : "r" (sp));
           break;
           
         case CBEGIN:
@@ -572,6 +577,7 @@ void interpreter(bytefile *bf, char* filename) {
           check_sp(sizeof(activation));
           memcpy(sp, &act, sizeof(activation));
           sp = (int*) ((char*) sp + sizeof(activation));
+          __asm__("movl %0, __gc_stack_top" : : "r" (sp));
           break;
           
         case CLOSURE:
