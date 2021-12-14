@@ -12,6 +12,10 @@ is added implicitly by the compiler and can not be specified by an end user.
 
 The following declarations are accessible:
 
+\descr{\lstinline|fun uppercase (n)|}{Convert \lstinline|n|, treated as ASCII code, into the code of the same symbol in upper case.}
+
+\descr{\lstinline|fun lowercase (n)|}{Convert \lstinline|n|, treated as ASCII code, into the code of the same symbol in lower case.}
+
 \descr{\lstinline|fun assert (n, s, ...)|}{Asserts that \lstinline|n| is non-zero; otherwise raises \lstinline|failure| with
   a corresponding error message.}
 
@@ -82,6 +86,8 @@ is automatically open and closed within the call.}
 
 \descr{\lstinline|fun fwrite (fname, contents)|}{Writes a file. The arguments are file name and the contents to write as strings. The file
 is automatically created and closed within the call.}
+
+\descr{\lstinline|fun fexists (fname)|}{Checks if a file exists. The argument is the file name.}
 
 \descr{\lstinline|fun fprintf (file, fmt, ...)|}{Same as "\lstinline|printf|", but outputs to a given file. The file argument should be that acquired
   by \lstinline|fopen| function.}

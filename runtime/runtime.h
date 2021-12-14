@@ -12,6 +12,7 @@
 # include <regex.h>
 # include <time.h>
 # include <limits.h>
+# include <ctype.h>
 
 # define UNBOXED(x)  (((int) (x)) &  0x0001)
 # define UNBOX(x)    (((int) (x)) >> 1)
