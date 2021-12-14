@@ -9,70 +9,85 @@
 void *__start_custom_data;
 void *__stop_custom_data;
 
-#define BINOP 0
-#define LD 2
-#define LDA 3
-#define ST 4
-#define PATT 6
-#define CALL_EXTERNAL 7
-#define END_OF_FILE 15
+enum cmd1 {
+  BINOP = 0,
+  LD = 2,
+  LDA = 3,
+  ST = 4,
+  PATT = 6,
+  CALL_EXTERNAL = 7,
+  END_OF_FILE = 15
+};
 
-#define CONST 0
-#define STRING 1
-#define SEXP 2
-#define STA 4
-#define JMP 5
-#define END 6
-#define RET 7
-#define DROP 8
-#define DUP 9
-#define SWAP 10
-#define ELEM 11
+enum cmd2 {
+  CONST,
+  STRING,
+  SEXP,
+  STI,
+  STA,
+  JMP,
+  END,
+  RET,
+  DROP,
+  DUP,
+  SWAP,
+  ELEM
+};
 
-#define CJMPZ 0
-#define CJMPNZ 1
-#define BEGIN 2
-#define CBEGIN 3
-#define CLOSURE 4
-#define CALLC 5
-#define CALL 6
-#define TAG 7
-#define ARRAY 8
-#define FAIL 9
-#define LINE 10
+enum cmd3 {
+  CJMPZ,
+  CJMPNZ,
+  BEGIN,
+  CBEGIN,
+  CLOSURE,
+  CALLC,
+  CALL,
+  TAG,
+  ARRAY,
+  FAIL,
+  LINE
+};
 
-#define BINOP_PLUS 1
-#define BINOP_MINUS 2
-#define BINOP_MUL 3
-#define BINOP_DIV 4
-#define BINOP_MOD 5
-#define BINOP_LT 6
-#define BINOP_LE 7
-#define BINOP_GT 8
-#define BINOP_GE 9
-#define BINOP_EQ 10
-#define BINOP_NEQ 11
-#define BINOP_AND 12
-#define BINOP_OR 13
+enum binop {
+  BINOP_PLUS,
+  BINOP_MINUS,
+  BINOP_MUL,
+  BINOP_DIV,
+  BINOP_MOD,
+  BINOP_LT,
+  BINOP_LE,
+  BINOP_GT,
+  BINOP_GE,
+  BINOP_EQ,
+  BINOP_NEQ,
+  BINOP_AND,
+  BINOP_OR
+};
 
-#define MEM_GLOB 0
-#define MEM_LOC 1
-#define MEM_ARG 2
-#define MEM_ACC 3
+enum MEM {
+  MEM_GLOB,
+  MEM_LOC,
+  MEM_ARG,
+  MEM_ACC
+};
 
-#define LREAD 0
-#define LWRITE 1
-#define LLENGTH 2
-#define LSTRING 3
-#define BARRAY 4
+enum builtin {
+  LREAD,
+  LWRITE,
+  LLENGTH,
+  LSTRING,
+  BARRAY
+};
 
-#define PATT_STR 0
-#define PATT_STRING 1
-#define PATT_ARRAY 2
-#define PATT_SEXP 3
-#define PATT_REF 4
-#define PATT_VAL 5
-#define PATT_FUN 6
+enum patt { 
+  PATT_STR,
+  PATT_STRING,
+  PATT_ARRAY,
+  PATT_SEXP,
+  PATT_REF,
+  PATT_VAL,
+  PATT_FUN
+};
 
 const int STACK_SIZE = 256 * 1024 * 1024;
 
@@ -408,7 +423,7 @@ void interpreter(bytefile *bf, char* filename) {
         ; int y = UNBOX(pop());
         int x = UNBOX(pop());
 
-        switch (l) {
+        switch (l - 1) {
           case BINOP_PLUS: push(BOX(x + y)); break;
           case BINOP_MINUS: push(BOX(x - y)); break;
           case BINOP_MUL: push(BOX(x * y)); break;
